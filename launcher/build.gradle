@@ -31,35 +31,62 @@ tasks.named('run') {
 }
 
 /*
- * Produces a native Windows installer + Space~line.exe with a bundled Java
- * runtime, so end users don't need a JDK installed. Run on Windows:
+ * Native Windows packaging via the JDK's jpackage (bundled with JDK 21+).
  *
- *   gradlew.bat :launcher:packageExe
+ *   gradlew.bat :launcher:packageApp        -> a runnable app folder (Spaceline.exe)
+ *   gradlew.bat :launcher:packageInstaller  -> a shareable Spaceline-<ver>.exe installer
  *
- * Output: launcher/build/jpackage/. Requires the JDK's jpackage (bundled with
- * JDK 21) and, for the .msi/.exe installer, WiX Toolset on PATH.
+ * Both bundle a Java runtime, so the people you share with don't need Java.
+ * The INSTALLER additionally requires the free WiX Toolset v3 on PATH
+ * (https://github.com/wixtoolset/wix3/releases) — jpackage uses it to build the
+ * .exe/.msi. The app folder needs no extra tools.
+ *
+ * Windows installers require a version whose major component is > 0, so the
+ * installer version is taken from the `installerVersion` property (default 1.0.0)
+ * rather than the project's 0.x dev version.
  */
-tasks.register('packageExe', Exec) {
+def jpackageAppName = 'Spaceline'
+def jpackageInstallerVersion = (project.findProperty('installerVersion') ?: '1.0.0').toString()
+def jpackageInput = layout.buildDirectory.dir('install/launcher/lib')
+def jpackageOut = layout.buildDirectory.dir('jpackage')
+def jpackageMainJar = "launcher-${project.version}.jar"
+def jpackageMainClass = 'com.spaceline.launcher.gui.SpaceLineLauncherApp'
+
+tasks.register('packageApp', Exec) {
     dependsOn 'installDist'
     group = 'distribution'
-    description = 'Builds a native Windows .exe/.msi via jpackage (run on Windows).'
-
-    def installDir = layout.buildDirectory.dir('install/launcher')
-    def outputDir = layout.buildDirectory.dir('jpackage')
-
-    doFirst {
-        delete outputDir
-        outputDir.get().asFile.mkdirs()
-    }
-
+    description = 'Builds a runnable Windows app folder (Spaceline.exe) via jpackage.'
+    doFirst { delete jpackageOut; jpackageOut.get().asFile.mkdirs() }
     commandLine 'jpackage',
             '--type', 'app-image',
-            '--name', 'Space~line',
-            '--app-version', project.version.toString().replaceAll('[^0-9.].*', '') ?: '1.0',
-            '--input', installDir.get().dir('lib').asFile.absolutePath,
-            '--main-jar', "launcher-${project.version}.jar",
-            '--main-class', 'com.spaceline.launcher.gui.SpaceLineLauncherApp',
-            '--dest', outputDir.get().asFile.absolutePath,
-            '--vendor', 'Space~line',
+            '--name', jpackageAppName,
+            '--app-version', jpackageInstallerVersion,
+            '--input', jpackageInput.get().asFile.absolutePath,
+            '--main-jar', jpackageMainJar,
+            '--main-class', jpackageMainClass,
+            '--dest', jpackageOut.get().asFile.absolutePath,
+            '--vendor', 'Spaceline',
             '--java-options', '-Xmx2g'
+}
+
+tasks.register('packageInstaller', Exec) {
+    dependsOn 'installDist'
+    group = 'distribution'
+    description = 'Builds a shareable Windows .exe installer via jpackage (needs WiX Toolset v3).'
+    doFirst { delete jpackageOut; jpackageOut.get().asFile.mkdirs() }
+    commandLine 'jpackage',
+            '--type', 'exe',
+            '--name', jpackageAppName,
+            '--app-version', jpackageInstallerVersion,
+            '--input', jpackageInput.get().asFile.absolutePath,
+            '--main-jar', jpackageMainJar,
+            '--main-class', jpackageMainClass,
+            '--dest', jpackageOut.get().asFile.absolutePath,
+            '--vendor', 'Spaceline',
+            '--java-options', '-Xmx2g',
+            '--win-shortcut',       // create a desktop shortcut
+            '--win-menu',           // add to the Start menu
+            '--win-menu-group', 'Spaceline',
+            '--win-dir-chooser',    // let the user pick the install location
+            '--win-per-user-install'
 }

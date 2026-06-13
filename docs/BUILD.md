@@ -128,21 +128,42 @@ From the window you can:
 - **PLAY** — downloads (first time) and launches Minecraft with the selected
   account, streaming the log into the console. **Stop** ends it.
 
-### Make a native Windows `.exe`
+### Make a native Windows app or shareable `.exe` installer
 
-Java's bundled `jpackage` produces a `Space~line.exe` with its own runtime, so
-end users don't need Java installed. **Run this on Windows:**
+Java's bundled `jpackage` (part of JDK 21+) packages the launcher **with its own
+Java runtime**, so the people you share it with don't need Java installed. There
+are two options.
+
+**A. Runnable app folder** (no extra tools):
 
 ```cmd
-gradlew.bat :launcher:packageExe
+gradlew.bat :launcher:packageApp
 ```
 
-The app image (including `Space~line.exe`) appears in
-`launcher\build\jpackage\Space~line\`. Double-click the exe to launch the GUI.
+Produces `launcher\build\jpackage\Spaceline\` containing `Spaceline.exe`.
+Double-click it to run. To share, zip that whole `Spaceline` folder.
 
-> For a full `.msi`/`.exe` *installer* (rather than an app folder), install the
-> free [WiX Toolset](https://wixtoolset.org/) and change `--type app-image` to
-> `--type msi` in the `packageExe` task.
+**B. A real shareable installer** — a single `Spaceline-1.0.0.exe` that installs
+the app, adds a Start-menu entry and a desktop shortcut:
+
+1. Install the free **WiX Toolset v3** (jpackage uses it to build the installer):
+   download from <https://github.com/wixtoolset/wix3/releases> (e.g.
+   `wix311.exe`), install it, and make sure its `bin` folder is on your `PATH`
+   (the installer usually does this).
+2. Build the installer:
+   ```cmd
+   gradlew.bat :launcher:packageInstaller
+   ```
+3. The installer appears at `launcher\build\jpackage\Spaceline-1.0.0.exe`. That
+   single file is what you share — anyone can run it to install Space~line.
+
+> Set a custom installer version with
+> `gradlew.bat :launcher:packageInstaller -PinstallerVersion=1.2.0`
+> (Windows installers require the major version to be greater than 0).
+>
+> To add an app icon, drop a `.ico` file in and add
+> `--icon path\to\icon.ico` to the `packageInstaller` task in
+> `launcher/build.gradle`.
 
 ### Option B — build a standalone install (no Gradle needed afterwards)
 
