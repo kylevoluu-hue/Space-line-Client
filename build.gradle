@@ -1,0 +1,53 @@
+/*
+ * Root build configuration shared by all JVM sub-projects.
+ *
+ * Space~line targets Java 21 as the baseline and is verified to run on the
+ * Java 21–25 range. The toolchain is pinned to 21 so the produced bytecode
+ * remains compatible with every supported runtime.
+ */
+plugins {
+    id 'java'
+    id 'jacoco'
+}
+
+allprojects {
+    group = 'com.spaceline'
+    version = rootProject.findProperty('spaceLineVersion') ?: '0.1.0'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'jacoco'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+        withSourcesJar()
+    }
+
+    dependencies {
+        // Shared JSON + logging stack used across the JVM modules.
+        implementation 'com.google.code.gson:gson:2.11.0'
+        implementation 'org.slf4j:slf4j-api:2.0.13'
+        runtimeOnly 'org.slf4j:slf4j-simple:2.0.13'
+
+        testImplementation platform('org.junit:junit-bom:5.10.2')
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+        finalizedBy tasks.named('jacocoTestReport')
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs << '-Xlint:all,-processing,-serial' << '-parameters'
+    }
+}

@@ -1,0 +1,18 @@
+/*
+ * Space~line Client — root build.
+ *
+ * This root build contains the two pure-JVM modules that have no Minecraft /
+ * Fabric dependencies and therefore build anywhere with access to Maven Central:
+ *
+ *   :common   — shared logic (config, events, registry, module + HUD framework)
+ *   :launcher — desktop launcher application
+ *
+ * The Fabric client lives in ./client as a *separate* Gradle build. It requires
+ * access to https://maven.fabricmc.net and the Minecraft libraries, which are
+ * not always reachable from every CI sandbox, so it is intentionally not wired
+ * into this root build. See client/README.md and the root README for details.
+ */
+rootProject.name = 'space-line'
+
+include 'common'
+include 'launcher'

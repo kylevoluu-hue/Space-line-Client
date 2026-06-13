@@ -1,0 +1,26 @@
+/*
+ * :launcher — the desktop launcher application.
+ *
+ * Pure JVM: account management, version + Java resolution, process control and
+ * the Modrinth / CurseForge browser clients. The GUI layer is deliberately thin
+ * and isolated behind interfaces so the core logic stays headless-testable.
+ */
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':common')
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'org.slf4j:slf4j-api:2.0.13'
+}
+
+application {
+    mainClass = 'com.spaceline.launcher.SpaceLineLauncher'
+}
+
+tasks.named('run') {
+    // The launcher reads/writes the per-user data directory; allow it to find a
+    // headless flag for CI smoke runs.
+    systemProperty 'spaceline.headless', findProperty('headless') ?: 'false'
+}

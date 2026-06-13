@@ -1,0 +1,33 @@
+# Gradle
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/**/build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.code-workspace
+.settings/
+.classpath
+.project
+bin/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Space~line runtime data (per-user, never committed)
+/run/
+*.log
+spaceline-data/
+.spaceline/
+
+# Secrets / local config
+*.local.properties
+secrets.properties
+.env

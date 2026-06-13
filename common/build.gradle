@@ -1,0 +1,15 @@
+/*
+ * :common — shared, Minecraft-agnostic logic.
+ *
+ * Everything here is plain Java 21 with only Gson + SLF4J on the classpath, so
+ * it builds and unit-tests anywhere. Both the launcher and the Fabric client
+ * depend on this module.
+ */
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api 'com.google.code.gson:gson:2.11.0'
+    api 'org.slf4j:slf4j-api:2.0.13'
+}
