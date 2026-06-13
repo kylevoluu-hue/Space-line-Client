@@ -43,6 +43,7 @@ public final class SpaceLineFabricClient implements ClientModInitializer {
 
         KeyBindings.register(engine);
         ModuleEffects.register(engine);
+        com.spaceline.client.fabric.menu.SpacelineMenu.register();
 
         // Bridge Fabric's per-frame HUD render into the engine's event bus.
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> {

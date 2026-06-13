@@ -8,6 +8,7 @@
     "GameRendererMixin",
     "MouseMixin"
   ],
+  "comment": "The custom title screen + resource-pack browser use Fabric's Screen API (com.spaceline.client.fabric.menu), not mixins.",
   "injectors": {
     "defaultRequire": 1
   }
