@@ -124,10 +124,7 @@ public final class JavaManager {
 
     private List<Path> conventionalRoots() {
         return switch (Platform.current()) {
-            case WINDOWS -> List.of(
-                    Path.of("C:/Program Files/Java"),
-                    Path.of("C:/Program Files/Eclipse Adoptium"),
-                    Path.of("C:/Program Files/Microsoft/jdk"));
+            case WINDOWS -> windowsRoots();
             case MACOS -> List.of(
                     Path.of("/Library/Java/JavaVirtualMachines"),
                     Path.of(System.getProperty("user.home"), "Library/Java/JavaVirtualMachines"));
@@ -136,6 +133,32 @@ public final class JavaManager {
                     Path.of("/usr/java"),
                     Path.of(System.getProperty("user.home"), ".sdkman/candidates/java"));
         };
+    }
+
+    /** Windows JDK locations, including the per-user installs many JDKs default to. */
+    private List<Path> windowsRoots() {
+        List<Path> roots = new ArrayList<>(List.of(
+                Path.of("C:/Program Files/Java"),
+                Path.of("C:/Program Files/Eclipse Adoptium"),
+                Path.of("C:/Program Files/Microsoft"),
+                Path.of("C:/Program Files/Zulu"),
+                Path.of("C:/Program Files/Amazon Corretto"),
+                Path.of("C:/Program Files/BellSoft")));
+
+        // Vendors increasingly install per-user under %LOCALAPPDATA%\Programs.
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData != null && !localAppData.isBlank()) {
+            Path programs = Path.of(localAppData, "Programs");
+            roots.add(programs.resolve("Eclipse Adoptium"));
+            roots.add(programs.resolve("Microsoft"));
+            roots.add(programs.resolve("Zulu"));
+        }
+        // JREs bundled by other launchers are usable runtimes too.
+        String appData = System.getenv("APPDATA");
+        if (appData != null && !appData.isBlank()) {
+            roots.add(Path.of(appData, ".minecraft", "runtime"));
+        }
+        return roots;
     }
 
     private String binaryName() {

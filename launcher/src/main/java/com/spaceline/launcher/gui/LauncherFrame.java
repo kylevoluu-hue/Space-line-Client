@@ -28,11 +28,15 @@ import javax.swing.JPopupMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
 import javax.swing.JTextArea;
+import javax.swing.JToggleButton;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
 import com.spaceline.launcher.LauncherContext;
 import com.spaceline.launcher.account.Account;
 import com.spaceline.launcher.instance.Instance;
@@ -66,6 +70,10 @@ public final class LauncherFrame extends JFrame {
     private final JLabel statusLabel = new JLabel("Ready");
     private final JButton playButton = new JButton("PLAY");
     private final JButton stopButton = new JButton("Stop");
+    private final JLabel instanceTitle = new JLabel("Select an instance to play");
+    private final JSlider ramSlider = new JSlider(1024, 16384, 4096);
+    private final JLabel ramValue = new JLabel("4096 MB");
+    private boolean darkTheme = true;
 
     public LauncherFrame(LauncherContext context) {
         super("Space~line Client");
@@ -110,8 +118,26 @@ public final class LauncherFrame extends JFrame {
         addAccount.addActionListener(e -> showAddAccountMenu(addAccount));
         right.add(addAccount);
 
+        JToggleButton themeToggle = new JToggleButton("Light");
+        themeToggle.addActionListener(e -> toggleTheme(themeToggle));
+        right.add(themeToggle);
+
         header.add(right, BorderLayout.EAST);
         return header;
+    }
+
+    private void toggleTheme(JToggleButton toggle) {
+        darkTheme = !darkTheme;
+        if (darkTheme) {
+            FlatDarkLaf.setup();
+            toggle.setText("Light");
+        } else {
+            FlatLightLaf.setup();
+            toggle.setText("Dark");
+        }
+        SwingUtilities.updateComponentTreeUI(this);
+        playButton.setBackground(accent());
+        playButton.setForeground(Color.WHITE);
     }
 
     private JPanel buildSidebar() {
@@ -126,7 +152,10 @@ public final class LauncherFrame extends JFrame {
 
         instanceList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         instanceList.setCellRenderer(new InstanceRenderer());
-        instanceList.addListSelectionListener(e -> updatePlayState());
+        instanceList.addListSelectionListener(e -> {
+            updateInstanceDetail();
+            updatePlayState();
+        });
         sidebar.add(new JScrollPane(instanceList), BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(new GridLayout(1, 2, 6, 0));
@@ -145,25 +174,44 @@ public final class LauncherFrame extends JFrame {
         JPanel main = new JPanel(new BorderLayout());
         main.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 16));
 
-        // Play bar.
-        JPanel playBar = new JPanel(new BorderLayout());
-        playBar.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
 
+        // Selected-instance detail: title + RAM allocation slider.
+        instanceTitle.setFont(instanceTitle.getFont().deriveFont(Font.BOLD, 16f));
+        instanceTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+        top.add(instanceTitle);
+        top.add(Box.createVerticalStrut(6));
+
+        ramSlider.setMajorTickSpacing(4096);
+        ramSlider.setMinorTickSpacing(1024);
+        ramSlider.setSnapToTicks(true);
+        ramSlider.setEnabled(false);
+        ramSlider.addChangeListener(e -> onRamChanged());
+        JPanel ramRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        ramRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        ramRow.add(new JLabel("Memory:"));
+        ramRow.add(ramSlider);
+        ramRow.add(ramValue);
+        top.add(ramRow);
+        top.add(Box.createVerticalStrut(8));
+
+        // Play / Stop controls.
         playButton.setFont(playButton.getFont().deriveFont(Font.BOLD, 18f));
         playButton.setBackground(accent());
         playButton.setForeground(Color.WHITE);
         playButton.setPreferredSize(new Dimension(160, 48));
         playButton.addActionListener(e -> launchSelected());
-
         stopButton.setEnabled(false);
         stopButton.addActionListener(e -> stopSelected());
-
         JPanel playButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        playButtons.setAlignmentX(Component.LEFT_ALIGNMENT);
         playButtons.add(playButton);
         playButtons.add(stopButton);
-        playBar.add(playButtons, BorderLayout.WEST);
+        top.add(playButtons);
 
-        main.add(playBar, BorderLayout.NORTH);
+        main.add(top, BorderLayout.NORTH);
 
         // Console.
         console.setEditable(false);
@@ -172,6 +220,29 @@ public final class LauncherFrame extends JFrame {
         consoleScroll.setBorder(BorderFactory.createTitledBorder("Log"));
         main.add(consoleScroll, BorderLayout.CENTER);
         return main;
+    }
+
+    private void onRamChanged() {
+        ramValue.setText(ramSlider.getValue() + " MB");
+        Instance selected = instanceList.getSelectedValue();
+        if (selected != null && ramSlider.isEnabled()) {
+            selected.setMaxMemoryMb(ramSlider.getValue());
+            context.instances().save(selected);
+        }
+    }
+
+    private void updateInstanceDetail() {
+        Instance selected = instanceList.getSelectedValue();
+        if (selected == null) {
+            instanceTitle.setText("Select an instance to play");
+            ramSlider.setEnabled(false);
+            return;
+        }
+        instanceTitle.setText(selected.name() + "  —  " + selected.minecraftVersion()
+                + " · " + selected.loader().displayName());
+        ramSlider.setEnabled(true);
+        ramSlider.setValue(selected.maxMemoryMb());
+        ramValue.setText(selected.maxMemoryMb() + " MB");
     }
 
     private JPanel buildStatusBar() {

@@ -77,13 +77,16 @@ public final class GameLauncher {
             VersionAdapter adapter = adapters.require(version);
             adapter.verifyLoaderSupported(instance.loader().id());
 
-            JavaRuntime java = selectJava(instance, adapter);
-            LOG.info("Launching '{}' ({} {}) with {}", instance.id(), version.id(),
-                    instance.loader().id(), java.describe());
-
+            // Install first so we can read the version's exact Java requirement
+            // from its JSON, rather than guessing from the adapter alone.
             GameInstallation installation = installer.install(
                     version.id(), version.manifestUrl(), instance.loader(),
                     instance.fabricLoaderVersion());
+
+            int requiredJava = requiredJavaMajor(installation, adapter);
+            JavaRuntime java = selectJava(instance, requiredJava);
+            LOG.info("Launching '{}' ({} {}) with {} (requires Java {}+)", instance.id(), version.id(),
+                    instance.loader().id(), java.describe(), requiredJava);
 
             validateMods(instance);
 
@@ -111,7 +114,27 @@ public final class GameLauncher {
                 + "' is not an installable stable release (>= " + MinecraftVersion.MINIMUM_SUPPORTED + ")");
     }
 
-    private JavaRuntime selectJava(Instance instance, VersionAdapter adapter) throws LaunchException {
+    /**
+     * Reads the Java major version Mojang declares for this version
+     * ({@code javaVersion.majorVersion} in the version JSON), falling back to the
+     * adapter's value when absent. This keeps the launcher correct when a new
+     * release raises its Java requirement (e.g. needing Java 25).
+     */
+    private int requiredJavaMajor(GameInstallation installation, VersionAdapter adapter) {
+        try {
+            if (installation.versionJson().has("javaVersion")) {
+                var javaVersion = installation.versionJson().getAsJsonObject("javaVersion");
+                if (javaVersion.has("majorVersion")) {
+                    return Math.max(adapter.requiredJavaMajor(), javaVersion.get("majorVersion").getAsInt());
+                }
+            }
+        } catch (RuntimeException e) {
+            LOG.debug("Could not read javaVersion from version JSON; using adapter default", e);
+        }
+        return adapter.requiredJavaMajor();
+    }
+
+    private JavaRuntime selectJava(Instance instance, int requiredMajor) throws LaunchException {
         if (instance.javaPathOverride() != null && !instance.javaPathOverride().isBlank()) {
             return javaManager.detectAll().stream()
                     .filter(r -> r.executable().toString().equals(instance.javaPathOverride()))
@@ -119,11 +142,11 @@ public final class GameLauncher {
                     .orElseThrow(() -> new LaunchException(
                             "Configured Java runtime not found: " + instance.javaPathOverride()));
         }
-        return javaManager.selectFor(adapter.requiredJavaMajor())
+        return javaManager.selectFor(requiredMajor)
                 .orElseThrow(() -> new LaunchException(
-                        "No installed Java " + adapter.requiredJavaMajor()
-                                + "+ runtime found (Space~line supports Java 21–25). "
-                                + "Install a JDK or set SPACELINE_JAVA_" + adapter.requiredJavaMajor() + "."));
+                        "This version needs Java " + requiredMajor + " but no matching runtime was found. "
+                                + "Install a JDK " + requiredMajor + " (or newer, up to 25) "
+                                + "or set SPACELINE_JAVA_" + requiredMajor + " to its path."));
     }
 
     private void validateMods(Instance instance) {

@@ -8,10 +8,10 @@ import net.minecraft.client.MinecraftClient;
 
 /**
  * Applies the per-tick, option-driven module effects that are simpler to push
- * than to mix in — currently the Brightness/Fullbright gamma override.
+ * than to mix in: the Brightness/Fullbright gamma override and Toggle Sprint.
  *
- * <p>The previous gamma is restored when the module is turned off, so toggling
- * Fullbright leaves the user's own brightness setting intact.
+ * <p>The previous gamma is restored when Fullbright is turned off, so toggling
+ * it leaves the user's own brightness setting intact.
  */
 public final class ModuleEffects {
 
@@ -21,7 +21,20 @@ public final class ModuleEffects {
     }
 
     public static void register(SpaceLineClientEngine engine) {
-        ClientTickEvents.END_CLIENT_TICK.register(client -> applyFullbright(client, engine));
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            applyFullbright(client, engine);
+            applyToggleSprint(client, engine);
+        });
+    }
+
+    private static void applyToggleSprint(MinecraftClient client, SpaceLineClientEngine engine) {
+        if (client.player == null) {
+            return;
+        }
+        Module sprint = engine.modules().require("toggle_sprint");
+        if (sprint.isEnabled() && client.player.forwardSpeed > 0 && !client.player.isSneaking()) {
+            client.player.setSprinting(true);
+        }
     }
 
     private static void applyFullbright(MinecraftClient client, SpaceLineClientEngine engine) {

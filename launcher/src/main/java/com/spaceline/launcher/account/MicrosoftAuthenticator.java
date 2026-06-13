@@ -30,17 +30,18 @@ public final class MicrosoftAuthenticator {
 
     private static final Logger LOG = LoggerFactory.getLogger(MicrosoftAuthenticator.class);
 
-    private static final String DEVICE_CODE_URL =
-            "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
-    private static final String TOKEN_URL =
-            "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+    // The legacy live.com device-code endpoints. Unlike the Azure AD v2 endpoints
+    // (which require you to register your own app), these work with the
+    // well-known public Minecraft client id, so sign-in works out of the box.
+    private static final String DEVICE_CODE_URL = "https://login.live.com/oauth20_connect.srf";
+    private static final String TOKEN_URL = "https://login.live.com/oauth20_token.srf";
     private static final String XBL_URL = "https://user.auth.xboxlive.com/user/authenticate";
     private static final String XSTS_URL = "https://xsts.auth.xboxlive.com/xsts/authorize";
     private static final String MC_LOGIN_URL =
             "https://api.minecraftservices.com/authentication/login_with_xbox";
     private static final String MC_PROFILE_URL =
             "https://api.minecraftservices.com/minecraft/profile";
-    private static final String SCOPE = "XboxLive.signin offline_access";
+    private static final String SCOPE = "service::user.auth.xboxlive.com::MBI_SSL";
 
     private final String clientId;
 
@@ -58,7 +59,10 @@ public final class MicrosoftAuthenticator {
      * user; then call {@link #pollForToken(DeviceCodePrompt, Consumer)}.
      */
     public DeviceCodePrompt requestDeviceCode() throws IOException {
-        String body = form(Map.of("client_id", clientId, "scope", SCOPE));
+        String body = form(Map.of(
+                "client_id", clientId,
+                "scope", SCOPE,
+                "response_type", "device_code"));
         JsonObject response = Http.postJson(DEVICE_CODE_URL, body,
                 Map.of("Content-Type", "application/x-www-form-urlencoded")).getAsJsonObject();
         return new DeviceCodePrompt(
@@ -101,8 +105,7 @@ public final class MicrosoftAuthenticator {
         String body = form(Map.of(
                 "client_id", clientId,
                 "grant_type", "refresh_token",
-                "refresh_token", account.refreshToken(),
-                "scope", SCOPE));
+                "refresh_token", account.refreshToken()));
         JsonObject token = Http.postJson(TOKEN_URL, body,
                 Map.of("Content-Type", "application/x-www-form-urlencoded")).getAsJsonObject();
         String msAccessToken = token.get("access_token").getAsString();
@@ -158,9 +161,11 @@ public final class MicrosoftAuthenticator {
     }
 
     private JsonObject authenticateXbox(String msAccessToken) throws IOException {
+        // For legacy live.com (MBI_SSL) tokens the RpsTicket is the raw access
+        // token with no "d=" prefix (that prefix is only for Azure AD tokens).
         String payload = """
                 {"Properties":{"AuthMethod":"RPS","SiteName":"user.auth.xboxlive.com",\
-                "RpsTicket":"d=%s"},"RelyingParty":"http://auth.xboxlive.com",\
+                "RpsTicket":"%s"},"RelyingParty":"http://auth.xboxlive.com",\
                 "TokenType":"JWT"}""".formatted(msAccessToken);
         return Http.postJson(XBL_URL, payload, jsonHeaders()).getAsJsonObject();
     }
