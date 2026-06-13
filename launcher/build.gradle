@@ -48,7 +48,8 @@ tasks.named('run') {
 def jpackageAppName = 'Spaceline'
 def jpackageInstallerVersion = (project.findProperty('installerVersion') ?: '1.0.0').toString()
 def jpackageInput = layout.buildDirectory.dir('install/launcher/lib')
-def jpackageOut = layout.buildDirectory.dir('jpackage')
+def jpackageAppOut = layout.buildDirectory.dir('jpackage/app')
+def jpackageInstallerOut = layout.buildDirectory.dir('jpackage/installer')
 def jpackageMainJar = "launcher-${project.version}.jar"
 def jpackageMainClass = 'com.spaceline.launcher.gui.SpaceLineLauncherApp'
 
@@ -56,7 +57,7 @@ tasks.register('packageApp', Exec) {
     dependsOn 'installDist'
     group = 'distribution'
     description = 'Builds a runnable Windows app folder (Spaceline.exe) via jpackage.'
-    doFirst { delete jpackageOut; jpackageOut.get().asFile.mkdirs() }
+    doFirst { delete jpackageAppOut; jpackageAppOut.get().asFile.mkdirs() }
     commandLine 'jpackage',
             '--type', 'app-image',
             '--name', jpackageAppName,
@@ -64,7 +65,7 @@ tasks.register('packageApp', Exec) {
             '--input', jpackageInput.get().asFile.absolutePath,
             '--main-jar', jpackageMainJar,
             '--main-class', jpackageMainClass,
-            '--dest', jpackageOut.get().asFile.absolutePath,
+            '--dest', jpackageAppOut.get().asFile.absolutePath,
             '--vendor', 'Spaceline',
             '--java-options', '-Xmx2g'
 }
@@ -73,7 +74,7 @@ tasks.register('packageInstaller', Exec) {
     dependsOn 'installDist'
     group = 'distribution'
     description = 'Builds a shareable Windows .exe installer via jpackage (needs WiX Toolset v3).'
-    doFirst { delete jpackageOut; jpackageOut.get().asFile.mkdirs() }
+    doFirst { delete jpackageInstallerOut; jpackageInstallerOut.get().asFile.mkdirs() }
     commandLine 'jpackage',
             '--type', 'exe',
             '--name', jpackageAppName,
@@ -81,7 +82,7 @@ tasks.register('packageInstaller', Exec) {
             '--input', jpackageInput.get().asFile.absolutePath,
             '--main-jar', jpackageMainJar,
             '--main-class', jpackageMainClass,
-            '--dest', jpackageOut.get().asFile.absolutePath,
+            '--dest', jpackageInstallerOut.get().asFile.absolutePath,
             '--vendor', 'Spaceline',
             '--java-options', '-Xmx2g',
             '--win-shortcut',       // create a desktop shortcut

@@ -140,7 +140,7 @@ are two options.
 gradlew.bat :launcher:packageApp
 ```
 
-Produces `launcher\build\jpackage\Spaceline\` containing `Spaceline.exe`.
+Produces `launcher\build\jpackage\app\Spaceline\` containing `Spaceline.exe`.
 Double-click it to run. To share, zip that whole `Spaceline` folder.
 
 **B. A real shareable installer** — a single `Spaceline-1.0.0.exe` that installs
@@ -154,8 +154,8 @@ the app, adds a Start-menu entry and a desktop shortcut:
    ```cmd
    gradlew.bat :launcher:packageInstaller
    ```
-3. The installer appears at `launcher\build\jpackage\Spaceline-1.0.0.exe`. That
-   single file is what you share — anyone can run it to install Space~line.
+3. The installer appears at `launcher\build\jpackage\installer\Spaceline-1.0.0.exe`.
+   That single file is what you share — anyone can run it to install Space~line.
 
 > Set a custom installer version with
 > `gradlew.bat :launcher:packageInstaller -PinstallerVersion=1.2.0`
