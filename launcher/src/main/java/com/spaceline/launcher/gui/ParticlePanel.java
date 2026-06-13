@@ -27,6 +27,8 @@ public final class ParticlePanel extends JPanel {
     private final int count;
     private Color particleColor;
     private boolean drawBackground = true;
+    private boolean particlesActive = true;
+    private java.awt.image.BufferedImage backgroundImage;
     private Color backgroundTop = new Color(0x0E, 0x12, 0x1E);
     private Color backgroundBottom = new Color(0x05, 0x07, 0x0F);
 
@@ -78,6 +80,22 @@ public final class ParticlePanel extends JPanel {
     public void setBackgroundColors(Color top, Color bottom) {
         this.backgroundTop = top;
         this.backgroundBottom = bottom;
+    }
+
+    public void setBackgroundImage(java.awt.image.BufferedImage image) {
+        this.backgroundImage = image;
+        repaint();
+    }
+
+    /** Toggles the particle/line overlay while keeping the background. */
+    public void setParticlesActive(boolean active) {
+        this.particlesActive = active;
+        if (active) {
+            start();
+        } else {
+            stop();
+        }
+        repaint();
     }
 
     public void start() {
@@ -136,8 +154,20 @@ public final class ParticlePanel extends JPanel {
         int h = getHeight();
 
         if (drawBackground) {
-            g.setPaint(new java.awt.GradientPaint(0, 0, backgroundTop, 0, h, backgroundBottom));
-            g.fillRect(0, 0, w, h);
+            if (backgroundImage != null) {
+                drawCover(g, backgroundImage, w, h);
+                // Dark scrim so foreground UI stays readable over any image.
+                g.setColor(new Color(0, 0, 0, 130));
+                g.fillRect(0, 0, w, h);
+            } else {
+                g.setPaint(new java.awt.GradientPaint(0, 0, backgroundTop, 0, h, backgroundBottom));
+                g.fillRect(0, 0, w, h);
+            }
+        }
+
+        if (!particlesActive) {
+            g.dispose();
+            return;
         }
 
         // Connecting lines for nearby particles.
@@ -167,5 +197,13 @@ public final class ParticlePanel extends JPanel {
             g.fillOval(xi - 2, yi - 2, 4, 4);
         }
         g.dispose();
+    }
+
+    /** Draws {@code img} scaled to cover the area, centred (like CSS cover). */
+    private static void drawCover(Graphics2D g, java.awt.image.BufferedImage img, int w, int h) {
+        double scale = Math.max(w / (double) img.getWidth(), h / (double) img.getHeight());
+        int dw = (int) (img.getWidth() * scale);
+        int dh = (int) (img.getHeight() * scale);
+        g.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh, null);
     }
 }

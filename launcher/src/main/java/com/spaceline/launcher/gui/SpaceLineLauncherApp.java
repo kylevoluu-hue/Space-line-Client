@@ -33,10 +33,7 @@ public final class SpaceLineLauncherApp {
 
         LOG.info("Starting Space~line launcher GUI");
         FlatDarkLaf.setup();
-        UIManager.put("Component.arc", 12);
-        UIManager.put("Button.arc", 12);
-        UIManager.put("ProgressBar.arc", 8);
-        UIManager.put("TextComponent.arc", 8);
+        Styling.applyDefaults();
 
         LauncherContext context = new LauncherContext();
         context.initialize();

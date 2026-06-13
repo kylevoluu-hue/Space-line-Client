@@ -22,7 +22,9 @@ import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
+import javax.swing.SwingConstants;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JMenuItem;
@@ -78,6 +80,12 @@ public final class LauncherFrame extends JFrame {
     private final java.awt.CardLayout pages = new java.awt.CardLayout();
     private final JPanel pageHost = new JPanel(pages);
     private ContentPanel contentPanel;
+    private ParticlePanel backgroundLayer;
+    private FadeOverlay fadeOverlay;
+
+    private final javax.swing.JCheckBox autoSaveLog = new javax.swing.JCheckBox("Auto-save");
+    private transient GameProcess currentProcess;
+    private transient java.io.BufferedWriter logWriter;
 
     public LauncherFrame(LauncherContext context) {
         super("Space~line Client");
@@ -88,16 +96,43 @@ public final class LauncherFrame extends JFrame {
         setLocationRelativeTo(null);
         loadWindowIcon();
 
-        setLayout(new BorderLayout());
-        add(buildHeader(), BorderLayout.NORTH);
-        add(buildNavRail(), BorderLayout.WEST);
-        add(buildPages(), BorderLayout.CENTER);
-        add(buildStatusBar(), BorderLayout.SOUTH);
+        // The whole window sits on a particle/background layer; the panels above
+        // it are made transparent so the background shows through (Lunar-style).
+        backgroundLayer = new ParticlePanel(90, new Color(0x6F, 0xB8, 0xFF));
+        backgroundLayer.setLayout(new BorderLayout());
+        backgroundLayer.add(buildHeader(), BorderLayout.NORTH);
+        backgroundLayer.add(buildNavRail(), BorderLayout.WEST);
+        backgroundLayer.add(buildPages(), BorderLayout.CENTER);
+        backgroundLayer.add(buildStatusBar(), BorderLayout.SOUTH);
+        setContentPane(backgroundLayer);
+        fadeOverlay = new FadeOverlay();
+        setGlassPane(fadeOverlay);
 
+        transparentize(backgroundLayer);
         refreshAccounts();
         refreshInstances();
         wireProcessExit();
         applyAppearance();
+        backgroundLayer.start();
+    }
+
+    /**
+     * Recursively makes container panels and labels non-opaque so the particle /
+     * image background shows through, while leaving interactive widgets (lists,
+     * text areas, buttons, fields) with their solid backgrounds for readability.
+     */
+    private void transparentize(java.awt.Container container) {
+        for (Component child : container.getComponents()) {
+            if (child == backgroundLayer) {
+                continue;
+            }
+            if (child instanceof JPanel || child instanceof JLabel) {
+                ((javax.swing.JComponent) child).setOpaque(false);
+            }
+            if (child instanceof java.awt.Container c) {
+                transparentize(c);
+            }
+        }
     }
 
     /** The left navigation rail that switches between pages. */
@@ -121,14 +156,33 @@ public final class LauncherFrame extends JFrame {
     private JButton navButton(String label, String card) {
         JButton b = new JButton(label);
         b.setAlignmentX(Component.CENTER_ALIGNMENT);
-        b.setMaximumSize(new Dimension(140, 38));
-        b.addActionListener(e -> {
-            pages.show(pageHost, card);
-            if ("content".equals(card) && contentPanel != null) {
-                contentPanel.refresh();
-            }
-        });
+        b.setMaximumSize(new Dimension(150, 42));
+        b.setHorizontalAlignment(SwingConstants.LEFT);
+        b.setFocusPainted(false);
+        b.putClientProperty("JButton.buttonType", "roundRect");
+        b.putClientProperty("FlatLaf.style", "arc: 14; borderWidth: 0; focusWidth: 0");
+        b.addActionListener(e -> transitionTo(card));
         return b;
+    }
+
+    /** Switches pages with a short cross-fade animation. */
+    private void transitionTo(String card) {
+        java.awt.image.BufferedImage snapshot = null;
+        if (pageHost.getWidth() > 0 && pageHost.getHeight() > 0) {
+            snapshot = new java.awt.image.BufferedImage(
+                    pageHost.getWidth(), pageHost.getHeight(), java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = snapshot.createGraphics();
+            pageHost.paint(g);
+            g.dispose();
+        }
+        pages.show(pageHost, card);
+        if ("content".equals(card) && contentPanel != null) {
+            contentPanel.refresh();
+        }
+        if (snapshot != null && fadeOverlay != null) {
+            java.awt.Point origin = SwingUtilities.convertPoint(pageHost, 0, 0, getRootPane());
+            fadeOverlay.play(snapshot, origin);
+        }
     }
 
     private JPanel buildPages() {
@@ -162,9 +216,40 @@ public final class LauncherFrame extends JFrame {
         } else {
             FlatDarkLaf.setup();
         }
+        Styling.applyDefaults();
         SwingUtilities.updateComponentTreeUI(this);
+        stylePlayButton();
+        // updateComponentTreeUI resets opaqueness, so re-assert it and the bg.
+        if (backgroundLayer != null) {
+            transparentize(backgroundLayer);
+            applyBackground();
+        }
+    }
+
+    /** Applies the particle toggle and background image from saved UI settings. */
+    private void applyBackground() {
+        var ui = context.uiSettings();
+        backgroundLayer.setParticlesActive(ui.particlesEnabled());
+        String bg = ui.backgroundImage();
+        if (bg != null && !bg.isBlank() && java.nio.file.Files.exists(java.nio.file.Path.of(bg))) {
+            try {
+                backgroundLayer.setBackgroundImage(javax.imageio.ImageIO.read(new java.io.File(bg)));
+            } catch (Exception e) {
+                backgroundLayer.setBackgroundImage(null);
+            }
+        } else {
+            backgroundLayer.setBackgroundImage(null);
+        }
+    }
+
+    /** Makes the PLAY button a large, rounded accent "pill". */
+    private void stylePlayButton() {
         playButton.setBackground(accent());
         playButton.setForeground(Color.WHITE);
+        playButton.putClientProperty("JButton.buttonType", "roundRect");
+        playButton.putClientProperty("FlatLaf.style", "arc: 999; borderWidth: 0; focusWidth: 0");
+        playButton.setBorderPainted(false);
+        playButton.setFocusPainted(false);
     }
 
     // ------------------------------------------------------------------
@@ -216,9 +301,9 @@ public final class LauncherFrame extends JFrame {
             FlatLightLaf.setup();
             toggle.setText("Dark");
         }
+        Styling.applyDefaults();
         SwingUtilities.updateComponentTreeUI(this);
-        playButton.setBackground(accent());
-        playButton.setForeground(Color.WHITE);
+        stylePlayButton();
     }
 
     private JPanel buildSidebar() {
@@ -294,13 +379,48 @@ public final class LauncherFrame extends JFrame {
 
         main.add(top, BorderLayout.NORTH);
 
-        // Console.
+        // Console + log toolbar.
+        JPanel logPanel = new JPanel(new BorderLayout(0, 4));
+        JPanel logBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        logBar.add(new JLabel("Log"));
+        JButton popOut = new JButton("Open in window");
+        popOut.addActionListener(e -> openLogWindow());
+        JButton exportLog = new JButton("Export…");
+        exportLog.addActionListener(e -> exportLog());
+        logBar.add(popOut);
+        logBar.add(exportLog);
+        logBar.add(autoSaveLog);
+        autoSaveLog.setSelected(true);
+        logPanel.add(logBar, BorderLayout.NORTH);
+
         console.setEditable(false);
         console.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        JScrollPane consoleScroll = new JScrollPane(console);
-        consoleScroll.setBorder(BorderFactory.createTitledBorder("Log"));
-        main.add(consoleScroll, BorderLayout.CENTER);
+        logPanel.add(new JScrollPane(console), BorderLayout.CENTER);
+        main.add(logPanel, BorderLayout.CENTER);
         return main;
+    }
+
+    private void openLogWindow() {
+        if (currentProcess == null) {
+            JOptionPane.showMessageDialog(this, "Launch an instance first to view its log.",
+                    "Log", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        new LogWindow(currentProcess).setVisible(true);
+    }
+
+    private void exportLog() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setSelectedFile(new java.io.File("spaceline-log.txt"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        try {
+            java.nio.file.Files.writeString(chooser.getSelectedFile().toPath(), console.getText());
+            setStatus("Log exported to " + chooser.getSelectedFile().getName());
+        } catch (Exception e) {
+            setStatus("Export failed: " + e.getMessage());
+        }
     }
 
     private void onRamChanged() {
@@ -523,8 +643,12 @@ public final class LauncherFrame extends JFrame {
             @Override
             protected Integer doInBackground() throws Exception {
                 GameProcess process = context.launcher().launch(instance, account);
+                currentProcess = process;
                 publish("Minecraft started (pid " + process.pid() + ")");
                 process.logBuffer().addListener(this::publish);
+                if (autoSaveLog.isSelected()) {
+                    attachAutoSave(process, instance.id());
+                }
                 process.logBuffer().snapshot().forEach(this::publish);
                 SwingUtilities.invokeLater(() -> {
                     setBusy(false, "Running " + instance.id());
@@ -553,6 +677,29 @@ public final class LauncherFrame extends JFrame {
                 }
             }
         }.execute();
+    }
+
+    /** Streams the running process's log to a timestamped file under logs/. */
+    private void attachAutoSave(GameProcess process, String instanceId) {
+        try {
+            String stamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
+            java.nio.file.Path file = context.paths().logs().resolve(instanceId + "-" + stamp + ".log");
+            logWriter = java.nio.file.Files.newBufferedWriter(file);
+            setStatus("Auto-saving log to " + file.getFileName());
+            process.logBuffer().addListener(line -> {
+                try {
+                    if (logWriter != null) {
+                        logWriter.write(line);
+                        logWriter.newLine();
+                        logWriter.flush();
+                    }
+                } catch (java.io.IOException ignored) {
+                    // best effort
+                }
+            });
+        } catch (java.io.IOException e) {
+            setStatus("Could not auto-save log: " + e.getMessage());
+        }
     }
 
     private void stopSelected() {
@@ -637,6 +784,51 @@ public final class LauncherFrame extends JFrame {
                         + "</small></html>");
             }
             return this;
+        }
+    }
+
+    /**
+     * Transparent glass-pane overlay used for the page cross-fade: it paints a
+     * snapshot of the previous page on top of the freshly-shown one and fades it
+     * out, producing a smooth transition.
+     */
+    private static final class FadeOverlay extends javax.swing.JComponent {
+        private java.awt.image.BufferedImage image;
+        private java.awt.Point origin = new java.awt.Point();
+        private float alpha;
+        private final javax.swing.Timer timer;
+
+        FadeOverlay() {
+            setOpaque(false);
+            this.timer = new javax.swing.Timer(16, e -> {
+                alpha -= 0.10f;
+                if (alpha <= 0) {
+                    alpha = 0;
+                    ((javax.swing.Timer) e.getSource()).stop();
+                    image = null;
+                    setVisible(false);
+                }
+                repaint();
+            });
+        }
+
+        void play(java.awt.image.BufferedImage snapshot, java.awt.Point at) {
+            this.image = snapshot;
+            this.origin = at;
+            this.alpha = 1f;
+            setVisible(true);
+            timer.restart();
+        }
+
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            if (image == null) {
+                return;
+            }
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, alpha));
+            g2.drawImage(image, origin.x, origin.y, null);
+            g2.dispose();
         }
     }
 }
