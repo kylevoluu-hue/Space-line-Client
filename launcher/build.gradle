@@ -52,6 +52,7 @@ def jpackageAppOut = layout.buildDirectory.dir('jpackage/app')
 def jpackageInstallerOut = layout.buildDirectory.dir('jpackage/installer')
 def jpackageMainJar = "launcher-${project.version}.jar"
 def jpackageMainClass = 'com.spaceline.launcher.gui.SpaceLineLauncherApp'
+def jpackageIcon = rootProject.file('branding/spaceline.ico').absolutePath
 
 tasks.register('packageApp', Exec) {
     dependsOn 'installDist'
@@ -66,6 +67,7 @@ tasks.register('packageApp', Exec) {
             '--main-jar', jpackageMainJar,
             '--main-class', jpackageMainClass,
             '--dest', jpackageAppOut.get().asFile.absolutePath,
+            '--icon', jpackageIcon,
             '--vendor', 'Spaceline',
             '--java-options', '-Xmx2g'
 }
@@ -83,6 +85,7 @@ tasks.register('packageInstaller', Exec) {
             '--main-jar', jpackageMainJar,
             '--main-class', jpackageMainClass,
             '--dest', jpackageInstallerOut.get().asFile.absolutePath,
+            '--icon', jpackageIcon,
             '--vendor', 'Spaceline',
             '--java-options', '-Xmx2g',
             '--win-shortcut',       // create a desktop shortcut

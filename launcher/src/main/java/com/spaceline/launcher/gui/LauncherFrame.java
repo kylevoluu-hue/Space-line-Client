@@ -82,6 +82,7 @@ public final class LauncherFrame extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setMinimumSize(new Dimension(900, 600));
         setLocationRelativeTo(null);
+        loadWindowIcon();
 
         setLayout(new BorderLayout());
         add(buildHeader(), BorderLayout.NORTH);
@@ -505,6 +506,17 @@ public final class LauncherFrame extends JFrame {
 
     private Color accent() {
         return new Color(context.themes().active().accent(), true);
+    }
+
+    /** Loads the black-hole app icon from the classpath for the window/taskbar. */
+    private void loadWindowIcon() {
+        try (var in = getClass().getResourceAsStream("/branding/spaceline.png")) {
+            if (in != null) {
+                setIconImage(javax.imageio.ImageIO.read(in));
+            }
+        } catch (Exception e) {
+            LOG.debug("Could not load window icon", e);
+        }
     }
 
     /** Renders an account as "username (TYPE)". */
