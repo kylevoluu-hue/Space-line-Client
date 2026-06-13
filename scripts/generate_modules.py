@@ -9,7 +9,7 @@ each module's enabled state + settings to apply the real in-game effect.
 """
 import os
 
-BASE = "client/src/main/java/com/spaceline/client/module"
+BASE = "../client/src/main/java/com/spaceline/client/module"
 PKG = "com.spaceline.client.module"
 
 # Already hand-written; do not regenerate.

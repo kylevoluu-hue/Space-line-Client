@@ -1,5 +1,6 @@
 package com.spaceline.launcher;
 
+import com.spaceline.common.ui.ThemeManager;
 import com.spaceline.common.util.SpaceLinePaths;
 import com.spaceline.launcher.account.AccountManager;
 import com.spaceline.launcher.account.AccountStore;
@@ -36,6 +37,7 @@ public final class LauncherContext {
     private final GameLauncher gameLauncher;
     private final ModBrowser modBrowser;
     private final SkinManager skinManager;
+    private final ThemeManager themeManager;
 
     public LauncherContext() {
         this(new SpaceLinePaths());
@@ -55,11 +57,13 @@ public final class LauncherContext {
                 javaManager, instanceManager, processController);
         this.modBrowser = ModBrowser.withDefaults();
         this.skinManager = new SkinManager(paths.skins(), paths.capes());
+        this.themeManager = new ThemeManager(paths.themes());
     }
 
     /** Loads persisted state. Call once at startup. */
     public void initialize() {
         accountManager.load();
+        themeManager.loadUserThemes();
     }
 
     public SpaceLinePaths paths() {
@@ -104,5 +108,9 @@ public final class LauncherContext {
 
     public SkinManager skins() {
         return skinManager;
+    }
+
+    public ThemeManager themes() {
+        return themeManager;
     }
 }
