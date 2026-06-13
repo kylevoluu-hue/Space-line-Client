@@ -1,0 +1,15 @@
+/*
+ * :client — the platform-agnostic Space~line client engine.
+ *
+ * This is plain Java (depends only on :common) so the entire module catalogue,
+ * event system and HUD layout logic compile and unit-test without Minecraft or
+ * Fabric on the classpath. The Fabric mod in ./fabric implements the rendering
+ * and input abstractions defined here against the real game.
+ */
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':common')
+}

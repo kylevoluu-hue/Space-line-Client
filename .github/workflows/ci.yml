@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Builds and tests the pure-JVM modules (common + launcher + client engine).
+  # These have no Minecraft dependency and must always pass.
+  core:
+    name: Core build (Java ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["21", "25"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        run: ./gradlew build --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-reports-java${{ matrix.java }}
+          path: "**/build/reports/tests/**"
+          if-no-files-found: ignore
+
+  # Builds the Fabric mod. It needs maven.fabricmc.net; allowed to fail without
+  # blocking the pipeline when that host is unreachable from the runner.
+  fabric:
+    name: Fabric client mod
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build mod jar
+        working-directory: client/fabric
+        run: ./gradlew build --stacktrace
+
+      - name: Upload mod jar
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spaceline-fabric-jar
+          path: client/fabric/build/libs/*.jar
+          if-no-files-found: ignore

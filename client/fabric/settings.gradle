@@ -1,0 +1,24 @@
+/*
+ * Space~line Fabric client — a standalone Gradle build.
+ *
+ * It is kept separate from the root build because it applies the Fabric Loom
+ * plugin and pulls Minecraft + Fabric from https://maven.fabricmc.net, which is
+ * not reachable from every CI sandbox. Building here requires that host to be
+ * accessible.
+ *
+ * The :common and :client engine modules are consumed via a composite build:
+ * `includeBuild('../..')` makes the root build's projects available, and Gradle
+ * substitutes the `com.spaceline:common` / `com.spaceline:client` dependencies
+ * below with those local projects automatically.
+ */
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.fabricmc.net/' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'space-line-fabric'
+
+includeBuild('../..')
