@@ -1,9 +1,15 @@
 package com.spaceline.launcher;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 
+import com.spaceline.launcher.account.Account;
+import com.spaceline.launcher.instance.Instance;
+import com.spaceline.launcher.instance.ModLoader;
 import com.spaceline.launcher.java.JavaRuntime;
+import com.spaceline.launcher.launch.GameLauncher;
+import com.spaceline.launcher.process.GameProcess;
 import com.spaceline.launcher.version.MinecraftVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +40,10 @@ public final class SpaceLineLauncher {
                 case "java" -> printJava(context);
                 case "accounts" -> printAccounts(context);
                 case "add-offline" -> addOffline(context, args);
+                case "create-instance" -> createInstance(context, args);
+                case "instances" -> listInstances(context);
+                case "launch" -> launch(context, args);
+                case "stop" -> stop(context, args);
                 case "--help", "help" -> printHelp();
                 default -> {
                     System.err.println("Unknown command: " + command);
@@ -41,7 +51,7 @@ public final class SpaceLineLauncher {
                     System.exit(2);
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOG.error("Command '{}' failed", command, e);
             System.err.println("Error: " + e.getMessage());
             System.exit(1);
@@ -96,21 +106,116 @@ public final class SpaceLineLauncher {
         System.out.println("Added offline account: " + account.username() + " (" + account.uuid() + ")");
     }
 
+    private static void createInstance(LauncherContext context, String[] args) throws IOException {
+        if (args.length < 4) {
+            System.err.println("Usage: create-instance <name> <mcVersion> <vanilla|fabric>");
+            System.exit(2);
+            return;
+        }
+        String name = args[1];
+        String mcVersion = args[2];
+        ModLoader loader = ModLoader.fromId(args[3]);
+
+        // Confirm the requested version is an installable stable release.
+        boolean supported = context.versions().supportedVersions().stream()
+                .anyMatch(v -> v.id().equals(mcVersion));
+        if (!supported) {
+            System.err.println("'" + mcVersion + "' is not an installable stable release (>= "
+                    + MinecraftVersion.MINIMUM_SUPPORTED + "). Run 'versions' to see the list.");
+            System.exit(1);
+            return;
+        }
+
+        Instance instance = context.instances().create(name, mcVersion, loader);
+        if (loader == ModLoader.FABRIC) {
+            String loaderVersion = context.fabric().latestStableLoader();
+            instance.setFabricLoaderVersion(loaderVersion);
+            context.instances().save(instance);
+            System.out.println("Resolved Fabric loader " + loaderVersion);
+        }
+        System.out.println("Created instance '" + instance.id() + "' (" + mcVersion + " " + loader.id() + ")");
+        System.out.println("Launch it with: launch " + instance.id());
+    }
+
+    private static void listInstances(LauncherContext context) {
+        List<Instance> instances = context.instances().list();
+        if (instances.isEmpty()) {
+            System.out.println("No instances. Create one with: create-instance <name> <mcVersion> <vanilla|fabric>");
+            return;
+        }
+        System.out.println("Instances:");
+        for (Instance instance : instances) {
+            boolean running = context.processes().isRunning(instance.id());
+            System.out.printf("  %-24s %s %-8s %s%n", instance.id(), instance.minecraftVersion(),
+                    instance.loader().id(), running ? "[running]" : "");
+        }
+    }
+
+    private static void launch(LauncherContext context, String[] args) throws Exception {
+        if (args.length < 2) {
+            System.err.println("Usage: launch <instanceId>");
+            System.exit(2);
+            return;
+        }
+        String instanceId = args[1];
+        Instance instance = context.instances().get(instanceId).orElse(null);
+        if (instance == null) {
+            System.err.println("No instance '" + instanceId + "'. Run 'instances' to list them.");
+            System.exit(1);
+            return;
+        }
+        Account account = context.accounts().active().orElse(null);
+        if (account == null) {
+            System.err.println("No active account. Add one with: add-offline <username>");
+            System.exit(1);
+            return;
+        }
+
+        System.out.println("Preparing '" + instance.id() + "' — first launch downloads Minecraft and may take a while...");
+        try {
+            GameProcess process = context.launcher().launch(instance, account);
+            System.out.println("Minecraft started (pid " + process.pid() + "). Streaming logs; press Ctrl+C to detach.");
+            process.logBuffer().addListener(System.out::println);
+            int exitCode = process.waitFor();
+            System.out.println("Minecraft exited with code " + exitCode);
+        } catch (GameLauncher.LaunchException e) {
+            System.err.println("Launch failed: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private static void stop(LauncherContext context, String[] args) {
+        if (args.length < 2) {
+            System.err.println("Usage: stop <instanceId>");
+            System.exit(2);
+            return;
+        }
+        context.processes().stop(args[1], Duration.ofSeconds(10));
+        System.out.println("Requested stop of '" + args[1] + "'");
+    }
+
     private static void printHelp() {
         System.out.println("""
-                Space~line Client launcher — diagnostic CLI
+                Space~line Client launcher - diagnostic CLI
 
                 Usage: spaceline <command> [args]
 
                 Commands:
-                  status              Show launcher data, account and instance summary (default)
-                  versions            List installable stable Minecraft releases (>= 1.21)
-                  java                List detected Java runtimes and which are supported
-                  accounts            List configured accounts
-                  add-offline <name>  Create an offline account
-                  help                Show this help
+                  status                                 Launcher data, account and instance summary (default)
+                  versions                               List installable stable Minecraft releases (>= 1.21)
+                  java                                   List detected Java runtimes
+                  accounts                               List configured accounts
+                  add-offline <name>                     Create an offline account
+                  create-instance <name> <ver> <loader>  Create an instance (loader: vanilla|fabric)
+                  instances                              List instances
+                  launch <instanceId>                    Download (if needed) and start Minecraft
+                  stop <instanceId>                      Gracefully stop a running instance
+                  help                                   Show this help
 
-                The full graphical launcher is provided by the desktop front-end.""");
+                Example:
+                  add-offline Kyle
+                  create-instance MyPack 1.21.4 fabric
+                  launch mypack""");
     }
 
     private SpaceLineLauncher() {
