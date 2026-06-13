@@ -1,6 +1,7 @@
 package com.spaceline.launcher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
@@ -34,5 +35,19 @@ class LaunchCommandTest {
     void mavenPathHandlesClassifier() {
         String path = VersionInstaller.mavenPath("org.lwjgl:lwjgl:3.3.3:natives-linux");
         assertTrue(path.endsWith("lwjgl-3.3.3-natives-linux.jar"));
+    }
+
+    @Test
+    void coordinateKeyIgnoresVersionForDedup() {
+        // Different ASM versions collapse to the same key (so one is dropped).
+        assertEquals(VersionInstaller.coordinateKey("org.ow2.asm:asm:9.10.1"),
+                VersionInstaller.coordinateKey("org.ow2.asm:asm:9.6"));
+    }
+
+    @Test
+    void coordinateKeyKeepsClassifierDistinct() {
+        // A library and its natives jar must NOT be de-duplicated together.
+        assertNotEquals(VersionInstaller.coordinateKey("org.lwjgl:lwjgl:3.3.3"),
+                VersionInstaller.coordinateKey("org.lwjgl:lwjgl:3.3.3:natives-windows"));
     }
 }

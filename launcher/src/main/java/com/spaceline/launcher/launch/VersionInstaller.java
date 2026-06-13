@@ -96,11 +96,24 @@ public final class VersionInstaller {
         if (!versionJson.has("libraries")) {
             return classpath;
         }
+        // De-duplicate by group:artifact:classifier (ignoring version). When the
+        // merged Fabric + vanilla library lists both contain e.g. ASM at
+        // different versions, the first one wins — and because Fabric's
+        // libraries are prepended during the merge, Fabric's (newer) version
+        // overrides vanilla's. Fabric Loader refuses to start with two copies of
+        // ASM on the classpath, so this de-dup is mandatory.
+        java.util.Set<String> seenCoordinates = new java.util.HashSet<>();
         for (JsonElement element : versionJson.getAsJsonArray("libraries")) {
             JsonObject library = element.getAsJsonObject();
             JsonArray rules = library.has("rules") ? library.getAsJsonArray("rules") : null;
             if (!RuleEvaluator.applies(rules)) {
                 continue;
+            }
+            if (library.has("name")) {
+                String key = coordinateKey(library.get("name").getAsString());
+                if (!seenCoordinates.add(key)) {
+                    continue; // a higher-priority copy of this artifact was already added
+                }
             }
             Path jar = resolveLibrary(library);
             if (jar != null && !classpath.contains(jar)) {
@@ -108,6 +121,15 @@ public final class VersionInstaller {
             }
         }
         return classpath;
+    }
+
+    /** {@code group:artifact:version[:classifier]} -> {@code group:artifact:classifier} (version-agnostic). */
+    public static String coordinateKey(String coordinate) {
+        String[] parts = coordinate.split(":");
+        String group = parts.length > 0 ? parts[0] : coordinate;
+        String artifact = parts.length > 1 ? parts[1] : "";
+        String classifier = parts.length > 3 ? parts[3] : "";
+        return group + ":" + artifact + ":" + classifier;
     }
 
     /** Downloads a library jar (artifact form, or maven-coordinate fallback). */
