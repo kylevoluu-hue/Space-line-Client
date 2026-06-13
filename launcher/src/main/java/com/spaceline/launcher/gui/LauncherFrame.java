@@ -75,24 +75,96 @@ public final class LauncherFrame extends JFrame {
     private final JLabel ramValue = new JLabel("4096 MB");
     private boolean darkTheme = true;
 
+    private final java.awt.CardLayout pages = new java.awt.CardLayout();
+    private final JPanel pageHost = new JPanel(pages);
+    private ContentPanel contentPanel;
+
     public LauncherFrame(LauncherContext context) {
         super("Space~line Client");
         this.context = context;
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(900, 600));
+        setMinimumSize(new Dimension(1000, 640));
         setLocationRelativeTo(null);
         loadWindowIcon();
 
         setLayout(new BorderLayout());
         add(buildHeader(), BorderLayout.NORTH);
-        add(buildSidebar(), BorderLayout.WEST);
-        add(buildMain(), BorderLayout.CENTER);
+        add(buildNavRail(), BorderLayout.WEST);
+        add(buildPages(), BorderLayout.CENTER);
         add(buildStatusBar(), BorderLayout.SOUTH);
 
         refreshAccounts();
         refreshInstances();
         wireProcessExit();
+        applyAppearance();
+    }
+
+    /** The left navigation rail that switches between pages. */
+    private JPanel buildNavRail() {
+        JPanel rail = new JPanel();
+        rail.setLayout(new BoxLayout(rail, BoxLayout.Y_AXIS));
+        rail.setBorder(BorderFactory.createEmptyBorder(12, 10, 12, 10));
+        rail.add(navButton("Play", "play"));
+        rail.add(Box.createVerticalStrut(6));
+        rail.add(navButton("Browse", "browse"));
+        rail.add(Box.createVerticalStrut(6));
+        rail.add(navButton("Content", "content"));
+        rail.add(Box.createVerticalStrut(6));
+        rail.add(navButton("Skins", "skins"));
+        rail.add(Box.createVerticalStrut(6));
+        rail.add(navButton("Appearance", "appearance"));
+        rail.add(Box.createVerticalGlue());
+        return rail;
+    }
+
+    private JButton navButton(String label, String card) {
+        JButton b = new JButton(label);
+        b.setAlignmentX(Component.CENTER_ALIGNMENT);
+        b.setMaximumSize(new Dimension(140, 38));
+        b.addActionListener(e -> {
+            pages.show(pageHost, card);
+            if ("content".equals(card) && contentPanel != null) {
+                contentPanel.refresh();
+            }
+        });
+        return b;
+    }
+
+    private JPanel buildPages() {
+        JPanel playPage = new JPanel(new BorderLayout());
+        playPage.add(buildSidebar(), BorderLayout.WEST);
+        playPage.add(buildMain(), BorderLayout.CENTER);
+
+        this.contentPanel = new ContentPanel(this, context);
+        pageHost.add(playPage, "play");
+        pageHost.add(new BrowsePanel(this, context), "browse");
+        pageHost.add(contentPanel, "content");
+        pageHost.add(new SkinPanel(context), "skins");
+        pageHost.add(new AppearancePanel(this, context), "appearance");
+        return pageHost;
+    }
+
+    /**
+     * Re-applies persisted appearance settings (UI font, theme accent, light/dark)
+     * to the whole window. Called at startup and whenever the user changes them.
+     */
+    public void applyAppearance() {
+        var ui = context.uiSettings();
+        javax.swing.UIManager.put("defaultFont",
+                new Font(ui.fontFamily(), Font.PLAIN, ui.fontSize()));
+        // Pick a light or dark base look from the active theme's background.
+        int bg = context.themes().active().background();
+        boolean light = ((bg >> 16) & 0xFF) + ((bg >> 8) & 0xFF) + (bg & 0xFF) > 384;
+        darkTheme = !light;
+        if (light) {
+            FlatLightLaf.setup();
+        } else {
+            FlatDarkLaf.setup();
+        }
+        SwingUtilities.updateComponentTreeUI(this);
+        playButton.setBackground(accent());
+        playButton.setForeground(Color.WHITE);
     }
 
     // ------------------------------------------------------------------

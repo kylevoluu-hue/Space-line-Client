@@ -1,6 +1,8 @@
 package com.spaceline.launcher;
 
+import com.spaceline.common.config.ConfigManager;
 import com.spaceline.common.ui.ThemeManager;
+import com.spaceline.common.ui.UiSettings;
 import com.spaceline.common.util.SpaceLinePaths;
 import com.spaceline.launcher.account.AccountManager;
 import com.spaceline.launcher.account.AccountStore;
@@ -14,6 +16,7 @@ import com.spaceline.launcher.launch.GameLauncher;
 import com.spaceline.launcher.launch.VersionInstaller;
 import com.spaceline.launcher.process.ProcessController;
 import com.spaceline.launcher.profile.ProfileManager;
+import com.spaceline.launcher.skin.SkinLibrary;
 import com.spaceline.launcher.skin.SkinManager;
 import com.spaceline.launcher.version.VersionRepository;
 import com.spaceline.launcher.version.adapter.VersionAdapterRegistry;
@@ -43,6 +46,9 @@ public final class LauncherContext {
     private final ThemeManager themeManager;
     private final ProfileManager profileManager;
     private final BundledMods bundledMods;
+    private final SkinLibrary skinLibrary;
+    private final ConfigManager<UiSettings> uiSettingsConfig;
+    private UiSettings uiSettings;
 
     public LauncherContext() {
         this(new SpaceLinePaths());
@@ -65,12 +71,21 @@ public final class LauncherContext {
         this.themeManager = new ThemeManager(paths.themes());
         this.profileManager = new ProfileManager(paths.profiles());
         this.bundledMods = new BundledMods(modBrowser);
+        this.skinLibrary = new SkinLibrary(paths.skins());
+        this.uiSettingsConfig = new ConfigManager<>(
+                paths.root().resolve("ui.json"), UiSettings.class, UiSettings::new);
+        this.uiSettings = uiSettingsConfig.load();
     }
 
     /** Loads persisted state. Call once at startup. */
     public void initialize() {
         accountManager.load();
         themeManager.loadUserThemes();
+        themeManager.setActive(safeTheme(uiSettings.themeId()));
+    }
+
+    private String safeTheme(String id) {
+        return themeManager.get(id).isPresent() ? id : "dark";
     }
 
     public SpaceLinePaths paths() {
@@ -127,6 +142,18 @@ public final class LauncherContext {
 
     public BundledMods bundledMods() {
         return bundledMods;
+    }
+
+    public SkinLibrary skinLibrary() {
+        return skinLibrary;
+    }
+
+    public UiSettings uiSettings() {
+        return uiSettings;
+    }
+
+    public void saveUiSettings() {
+        uiSettingsConfig.save(uiSettings);
     }
 
     /**
