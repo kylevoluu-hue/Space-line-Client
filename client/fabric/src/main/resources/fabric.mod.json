@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "spaceline",
+  "version": "${version}",
+  "name": "Space~line Client",
+  "description": "A modular Fabric client: toggleable modules, a fully customizable HUD and UI themes.",
+  "authors": ["Space~line Client contributors"],
+  "contact": {
+    "homepage": "https://github.com/kylevoluu-hue/space-line-client",
+    "sources": "https://github.com/kylevoluu-hue/space-line-client",
+    "issues": "https://github.com/kylevoluu-hue/space-line-client/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/spaceline/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.spaceline.client.fabric.SpaceLineFabricClient"]
+  },
+  "mixins": ["spaceline.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": ">=1.21",
+    "java": ">=21"
+  }
+}

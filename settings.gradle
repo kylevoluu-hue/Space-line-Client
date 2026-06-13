@@ -7,12 +7,19 @@
  *   :common   — shared logic (config, events, registry, module + HUD framework)
  *   :launcher — desktop launcher application
  *
- * The Fabric client lives in ./client as a *separate* Gradle build. It requires
- * access to https://maven.fabricmc.net and the Minecraft libraries, which are
- * not always reachable from every CI sandbox, so it is intentionally not wired
- * into this root build. See client/README.md and the root README for details.
+ *   :client   — the platform-agnostic client engine: the event system, all
+ *               client modules and the HUD layout/rendering logic, written
+ *               against a Renderer abstraction so it compiles and is unit-tested
+ *               with no Minecraft on the classpath.
+ *
+ * The actual Fabric mod that binds this engine to Minecraft (the mod entrypoint,
+ * mixins, key bindings and the Minecraft-backed Renderer) lives in
+ * ./client/fabric as a *separate* Gradle build, because it requires access to
+ * https://maven.fabricmc.net and the Minecraft libraries which are not reachable
+ * from every CI sandbox. See client/fabric/README.md for details.
  */
 rootProject.name = 'space-line'
 
 include 'common'
 include 'launcher'
+include 'client'
