@@ -34,7 +34,7 @@ public final class Http {
         headers.forEach(builder::header);
         HttpResponse<String> response = sendWithRetry(builder.build(),
                 HttpResponse.BodyHandlers.ofString());
-        ensureSuccess(url, response.statusCode());
+        ensureSuccess(url, response.statusCode(), response.body());
         return JsonParser.parseString(response.body());
     }
 
@@ -42,15 +42,23 @@ public final class Http {
         return getJson(url, Map.of());
     }
 
-    /** POSTs a JSON body and parses the JSON response. */
+    /** POSTs a body and parses the JSON response. */
     public static JsonElement postJson(String url, String body, Map<String, String> headers) throws IOException {
         HttpRequest.Builder builder = baseRequest(url)
-                .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
+        // Only default to JSON when the caller hasn't specified a content type;
+        // HttpRequest.Builder#header APPENDS, so setting it unconditionally would
+        // send two Content-Type values (e.g. json + form-urlencoded) and the
+        // server would reject the request.
+        boolean callerSetContentType = headers.keySet().stream()
+                .anyMatch(k -> k.equalsIgnoreCase("Content-Type"));
+        if (!callerSetContentType) {
+            builder.header("Content-Type", "application/json");
+        }
         headers.forEach(builder::header);
         HttpResponse<String> response = sendWithRetry(builder.build(),
                 HttpResponse.BodyHandlers.ofString());
-        ensureSuccess(url, response.statusCode());
+        ensureSuccess(url, response.statusCode(), response.body());
         return JsonParser.parseString(response.body());
     }
 
@@ -94,8 +102,17 @@ public final class Http {
     }
 
     private static void ensureSuccess(String url, int status) throws IOException {
+        ensureSuccess(url, status, null);
+    }
+
+    private static void ensureSuccess(String url, int status, String body) throws IOException {
         if (status < 200 || status >= 300) {
-            throw new IOException("HTTP " + status + " from " + url);
+            String detail = "";
+            if (body != null && !body.isBlank()) {
+                String trimmed = body.strip();
+                detail = ": " + (trimmed.length() > 300 ? trimmed.substring(0, 300) + "…" : trimmed);
+            }
+            throw new IOException("HTTP " + status + " from " + url + detail);
         }
     }
 
