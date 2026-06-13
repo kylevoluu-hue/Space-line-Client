@@ -4,6 +4,7 @@ import com.spaceline.common.ui.ThemeManager;
 import com.spaceline.common.util.SpaceLinePaths;
 import com.spaceline.launcher.account.AccountManager;
 import com.spaceline.launcher.account.AccountStore;
+import com.spaceline.launcher.account.MicrosoftAuthenticator;
 import com.spaceline.launcher.browser.ModBrowser;
 import com.spaceline.launcher.instance.InstanceManager;
 import com.spaceline.launcher.java.JavaManager;
@@ -112,5 +113,18 @@ public final class LauncherContext {
 
     public ThemeManager themes() {
         return themeManager;
+    }
+
+    /**
+     * Builds a Microsoft authenticator. The Azure public-client id is taken from
+     * the {@code spaceline.msaClientId} system property or {@code SPACELINE_MSA_CLIENT_ID}
+     * environment variable, defaulting to the well-known Minecraft device-code
+     * client id so sign-in works out of the box for personal use. Register your
+     * own Azure app for production deployments.
+     */
+    public MicrosoftAuthenticator microsoftAuthenticator() {
+        String clientId = System.getProperty("spaceline.msaClientId",
+                System.getenv().getOrDefault("SPACELINE_MSA_CLIENT_ID", "00000000402b5328"));
+        return new MicrosoftAuthenticator(clientId);
     }
 }

@@ -1,0 +1,466 @@
+package com.spaceline.launcher.gui;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JProgressBar;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
+
+import com.spaceline.launcher.LauncherContext;
+import com.spaceline.launcher.account.Account;
+import com.spaceline.launcher.instance.Instance;
+import com.spaceline.launcher.instance.ModLoader;
+import com.spaceline.launcher.launch.GameLauncher;
+import com.spaceline.launcher.process.GameProcess;
+import com.spaceline.launcher.version.MinecraftVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * The main launcher window: an account picker, an instance list and a prominent
+ * Play/Stop control with a live log console — the "menu before launching" that
+ * mirrors modern clients.
+ *
+ * <p>All long-running work (manifest fetches, version installs, the launch
+ * itself) runs on {@link SwingWorker}s so the UI never freezes; results are
+ * marshalled back onto the Swing event thread.
+ */
+public final class LauncherFrame extends JFrame {
+
+    private static final Logger LOG = LoggerFactory.getLogger(LauncherFrame.class);
+
+    private final transient LauncherContext context;
+
+    private final JComboBox<Account> accountCombo = new JComboBox<>();
+    private final DefaultListModel<Instance> instanceModel = new DefaultListModel<>();
+    private final JList<Instance> instanceList = new JList<>(instanceModel);
+    private final JTextArea console = new JTextArea();
+    private final JProgressBar progress = new JProgressBar();
+    private final JLabel statusLabel = new JLabel("Ready");
+    private final JButton playButton = new JButton("PLAY");
+    private final JButton stopButton = new JButton("Stop");
+
+    public LauncherFrame(LauncherContext context) {
+        super("Space~line Client");
+        this.context = context;
+
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setMinimumSize(new Dimension(900, 600));
+        setLocationRelativeTo(null);
+
+        setLayout(new BorderLayout());
+        add(buildHeader(), BorderLayout.NORTH);
+        add(buildSidebar(), BorderLayout.WEST);
+        add(buildMain(), BorderLayout.CENTER);
+        add(buildStatusBar(), BorderLayout.SOUTH);
+
+        refreshAccounts();
+        refreshInstances();
+        wireProcessExit();
+    }
+
+    // ------------------------------------------------------------------
+    // UI construction
+    // ------------------------------------------------------------------
+
+    private JPanel buildHeader() {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
+
+        JLabel title = new JLabel("Space~line");
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 22f));
+        title.setForeground(accent());
+        header.add(title, BorderLayout.WEST);
+
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        accountCombo.setRenderer(new AccountRenderer());
+        accountCombo.setPreferredSize(new Dimension(220, 30));
+        accountCombo.addActionListener(e -> onAccountSelected());
+        right.add(new JLabel("Account:"));
+        right.add(accountCombo);
+
+        JButton addAccount = new JButton("Add account");
+        addAccount.addActionListener(e -> showAddAccountMenu(addAccount));
+        right.add(addAccount);
+
+        header.add(right, BorderLayout.EAST);
+        return header;
+    }
+
+    private JPanel buildSidebar() {
+        JPanel sidebar = new JPanel(new BorderLayout());
+        sidebar.setBorder(BorderFactory.createEmptyBorder(0, 16, 8, 8));
+        sidebar.setPreferredSize(new Dimension(260, 0));
+
+        JLabel heading = new JLabel("Instances");
+        heading.setFont(heading.getFont().deriveFont(Font.BOLD, 14f));
+        heading.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
+        sidebar.add(heading, BorderLayout.NORTH);
+
+        instanceList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        instanceList.setCellRenderer(new InstanceRenderer());
+        instanceList.addListSelectionListener(e -> updatePlayState());
+        sidebar.add(new JScrollPane(instanceList), BorderLayout.CENTER);
+
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 6, 0));
+        JButton create = new JButton("New");
+        create.addActionListener(e -> showCreateInstanceDialog());
+        JButton delete = new JButton("Delete");
+        delete.addActionListener(e -> deleteSelectedInstance());
+        buttons.add(create);
+        buttons.add(delete);
+        buttons.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
+        sidebar.add(buttons, BorderLayout.SOUTH);
+        return sidebar;
+    }
+
+    private JPanel buildMain() {
+        JPanel main = new JPanel(new BorderLayout());
+        main.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 16));
+
+        // Play bar.
+        JPanel playBar = new JPanel(new BorderLayout());
+        playBar.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+
+        playButton.setFont(playButton.getFont().deriveFont(Font.BOLD, 18f));
+        playButton.setBackground(accent());
+        playButton.setForeground(Color.WHITE);
+        playButton.setPreferredSize(new Dimension(160, 48));
+        playButton.addActionListener(e -> launchSelected());
+
+        stopButton.setEnabled(false);
+        stopButton.addActionListener(e -> stopSelected());
+
+        JPanel playButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        playButtons.add(playButton);
+        playButtons.add(stopButton);
+        playBar.add(playButtons, BorderLayout.WEST);
+
+        main.add(playBar, BorderLayout.NORTH);
+
+        // Console.
+        console.setEditable(false);
+        console.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane consoleScroll = new JScrollPane(console);
+        consoleScroll.setBorder(BorderFactory.createTitledBorder("Log"));
+        main.add(consoleScroll, BorderLayout.CENTER);
+        return main;
+    }
+
+    private JPanel buildStatusBar() {
+        JPanel bar = new JPanel(new BorderLayout());
+        bar.setBorder(BorderFactory.createEmptyBorder(4, 16, 8, 16));
+        progress.setVisible(false);
+        progress.setIndeterminate(true);
+        progress.setPreferredSize(new Dimension(180, 16));
+        bar.add(statusLabel, BorderLayout.WEST);
+        bar.add(progress, BorderLayout.EAST);
+        return bar;
+    }
+
+    // ------------------------------------------------------------------
+    // Accounts
+    // ------------------------------------------------------------------
+
+    private void refreshAccounts() {
+        DefaultComboBoxModel<Account> model = new DefaultComboBoxModel<>();
+        List<Account> accounts = context.accounts().accounts();
+        accounts.forEach(model::addElement);
+        accountCombo.setModel(model);
+        context.accounts().active().ifPresent(accountCombo::setSelectedItem);
+        accountCombo.setRenderer(new AccountRenderer());
+        updatePlayState();
+    }
+
+    private void onAccountSelected() {
+        Account selected = (Account) accountCombo.getSelectedItem();
+        if (selected != null) {
+            context.accounts().setActive(selected.uuid());
+        }
+    }
+
+    private void showAddAccountMenu(Component anchor) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem offline = new JMenuItem("Offline account");
+        offline.addActionListener(e -> addOfflineAccount());
+        JMenuItem microsoft = new JMenuItem("Microsoft account");
+        microsoft.addActionListener(e -> addMicrosoftAccount());
+        menu.add(microsoft);
+        menu.add(offline);
+        menu.show(anchor, 0, anchor.getHeight());
+    }
+
+    private void addOfflineAccount() {
+        String username = JOptionPane.showInputDialog(this,
+                "Enter a username for the offline account:", "Offline account",
+                JOptionPane.PLAIN_MESSAGE);
+        if (username != null && !username.isBlank()) {
+            context.accounts().addOffline(username.trim());
+            refreshAccounts();
+        }
+    }
+
+    private void addMicrosoftAccount() {
+        MicrosoftLoginDialog dialog = new MicrosoftLoginDialog(this, context);
+        dialog.setVisible(true);
+        if (dialog.signedInAccount() != null) {
+            context.accounts().add(dialog.signedInAccount());
+            refreshAccounts();
+            setStatus("Signed in as " + dialog.signedInAccount().username());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Instances
+    // ------------------------------------------------------------------
+
+    private void refreshInstances() {
+        instanceModel.clear();
+        context.instances().list().forEach(instanceModel::addElement);
+        updatePlayState();
+    }
+
+    private void showCreateInstanceDialog() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+
+        javax.swing.JTextField nameField = new javax.swing.JTextField("New Instance");
+        JComboBox<String> versionCombo = new JComboBox<>();
+        versionCombo.addItem("Loading versions…");
+        versionCombo.setEnabled(false);
+        JComboBox<ModLoader> loaderCombo = new JComboBox<>(ModLoader.values());
+
+        panel.add(new JLabel("Name:"));
+        panel.add(nameField);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(new JLabel("Minecraft version:"));
+        panel.add(versionCombo);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(new JLabel("Loader:"));
+        panel.add(loaderCombo);
+
+        // Load the stable version list in the background.
+        new SwingWorker<List<MinecraftVersion>, Void>() {
+            @Override
+            protected List<MinecraftVersion> doInBackground() throws IOException {
+                return context.versions().supportedVersions();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    versionCombo.removeAllItems();
+                    get().forEach(v -> versionCombo.addItem(v.id()));
+                    versionCombo.setEnabled(true);
+                } catch (Exception e) {
+                    versionCombo.removeAllItems();
+                    versionCombo.addItem("(failed to load — check internet)");
+                }
+            }
+        }.execute();
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "New instance",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
+        String version = (String) versionCombo.getSelectedItem();
+        if (version == null || !version.matches("\\d+\\.\\d+.*")) {
+            JOptionPane.showMessageDialog(this, "Pick a valid Minecraft version.",
+                    "New instance", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        createInstance(nameField.getText().trim(), version, (ModLoader) loaderCombo.getSelectedItem());
+    }
+
+    private void createInstance(String name, String version, ModLoader loader) {
+        setBusy(true, "Creating instance…");
+        new SwingWorker<Instance, Void>() {
+            @Override
+            protected Instance doInBackground() throws IOException {
+                Instance instance = context.instances().create(name, version, loader);
+                if (loader == ModLoader.FABRIC) {
+                    instance.setFabricLoaderVersion(context.fabric().latestStableLoader());
+                    context.instances().save(instance);
+                }
+                return instance;
+            }
+
+            @Override
+            protected void done() {
+                setBusy(false, "Ready");
+                try {
+                    get();
+                    refreshInstances();
+                } catch (Exception e) {
+                    showError("Could not create instance", e);
+                }
+            }
+        }.execute();
+    }
+
+    private void deleteSelectedInstance() {
+        Instance selected = instanceList.getSelectedValue();
+        if (selected == null) {
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Delete instance '" + selected.id() + "' and all its files?",
+                "Delete instance", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm == JOptionPane.YES_OPTION) {
+            context.instances().delete(selected.id());
+            refreshInstances();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Launch / stop
+    // ------------------------------------------------------------------
+
+    private void launchSelected() {
+        Instance instance = instanceList.getSelectedValue();
+        Account account = (Account) accountCombo.getSelectedItem();
+        if (instance == null || account == null) {
+            return;
+        }
+        console.setText("");
+        setBusy(true, "Preparing " + instance.id() + " (first launch downloads Minecraft)…");
+        playButton.setEnabled(false);
+
+        new SwingWorker<Integer, String>() {
+            @Override
+            protected Integer doInBackground() throws Exception {
+                GameProcess process = context.launcher().launch(instance, account);
+                publish("Minecraft started (pid " + process.pid() + ")");
+                process.logBuffer().addListener(this::publish);
+                process.logBuffer().snapshot().forEach(this::publish);
+                SwingUtilities.invokeLater(() -> {
+                    setBusy(false, "Running " + instance.id());
+                    stopButton.setEnabled(true);
+                });
+                return process.waitFor();
+            }
+
+            @Override
+            protected void process(List<String> lines) {
+                lines.forEach(line -> console.append(line + "\n"));
+                console.setCaretPosition(console.getDocument().getLength());
+            }
+
+            @Override
+            protected void done() {
+                stopButton.setEnabled(false);
+                updatePlayState();
+                try {
+                    int code = get();
+                    setStatus("Exited (code " + code + ")");
+                } catch (Exception e) {
+                    setBusy(false, "Launch failed");
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    showError("Launch failed", cause);
+                }
+            }
+        }.execute();
+    }
+
+    private void stopSelected() {
+        Instance instance = instanceList.getSelectedValue();
+        if (instance != null) {
+            context.processes().stop(instance.id(), Duration.ofSeconds(10));
+            setStatus("Stopping " + instance.id() + "…");
+        }
+    }
+
+    private void wireProcessExit() {
+        context.processes().setExitListener((id, result, restarting) ->
+                SwingUtilities.invokeLater(() -> {
+                    setStatus(id + ": " + result.summary());
+                    stopButton.setEnabled(false);
+                    updatePlayState();
+                }));
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    private void updatePlayState() {
+        boolean canPlay = instanceList.getSelectedValue() != null
+                && accountCombo.getSelectedItem() != null;
+        playButton.setEnabled(canPlay && !progress.isVisible());
+    }
+
+    private void setBusy(boolean busy, String status) {
+        progress.setVisible(busy);
+        setStatus(status);
+        updatePlayState();
+    }
+
+    private void setStatus(String text) {
+        statusLabel.setText(text);
+    }
+
+    private void showError(String title, Throwable error) {
+        LOG.error(title, error);
+        JOptionPane.showMessageDialog(this, error.getMessage(), title, JOptionPane.ERROR_MESSAGE);
+    }
+
+    private Color accent() {
+        return new Color(context.themes().active().accent(), true);
+    }
+
+    /** Renders an account as "username (TYPE)". */
+    private static final class AccountRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                      boolean isSelected, boolean cellHasFocus) {
+            super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            if (value instanceof Account account) {
+                setText(account.username() + "  (" + account.type() + ")");
+            }
+            return this;
+        }
+    }
+
+    /** Renders an instance as "name — version loader". */
+    private static final class InstanceRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                      boolean isSelected, boolean cellHasFocus) {
+            super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            if (value instanceof Instance instance) {
+                setText("<html><b>" + instance.name() + "</b><br><small>"
+                        + instance.minecraftVersion() + " · " + instance.loader().displayName()
+                        + "</small></html>");
+            }
+            return this;
+        }
+    }
+}

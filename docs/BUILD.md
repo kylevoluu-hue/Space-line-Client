@@ -112,6 +112,38 @@ Other commands:
 > The current launcher is a **command-line tool**; the graphical front-end is the
 > next milestone (see the README roadmap).
 
+### Option A2 — open the graphical launcher (the window)
+
+Running with **no arguments** opens the Space~line window (account picker,
+instance list, version dropdown, big **PLAY** button, live log console):
+
+```bash
+./gradlew :launcher:run
+```
+
+From the window you can:
+- **Add account → Microsoft** — signs in with the device-code flow (shows a code
+  + a button to open the Microsoft page). Or **Add account → Offline**.
+- **New** — create an instance (pick a stable version + vanilla/Fabric).
+- **PLAY** — downloads (first time) and launches Minecraft with the selected
+  account, streaming the log into the console. **Stop** ends it.
+
+### Make a native Windows `.exe`
+
+Java's bundled `jpackage` produces a `Space~line.exe` with its own runtime, so
+end users don't need Java installed. **Run this on Windows:**
+
+```cmd
+gradlew.bat :launcher:packageExe
+```
+
+The app image (including `Space~line.exe`) appears in
+`launcher\build\jpackage\Space~line\`. Double-click the exe to launch the GUI.
+
+> For a full `.msi`/`.exe` *installer* (rather than an app folder), install the
+> free [WiX Toolset](https://wixtoolset.org/) and change `--type app-image` to
+> `--type msi` in the `packageExe` task.
+
 ### Option B — build a standalone install (no Gradle needed afterwards)
 
 ```bash

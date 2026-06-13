@@ -155,7 +155,8 @@ See [`ui/ThemeManager`](common/src/main/java/com/spaceline/common/ui/ThemeManage
 | 7 | UI themes + customization | ✅ (model) |
 | 8 | Modrinth / CurseForge integration | ✅ |
 | 9 | Skin + cape system | ✅ |
-| 10 | Graphical launcher front-end & per-module game effects | 🚧 |
+| 10 | Graphical launcher (Swing/FlatLaf) + MS login + `.exe` packaging | ✅ |
+| 11 | Per-module in-game effects & launcher polish | 🚧 |
 
 ---
 

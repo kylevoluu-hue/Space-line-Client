@@ -1,9 +1,10 @@
 /*
  * :launcher — the desktop launcher application.
  *
- * Pure JVM: account management, version + Java resolution, process control and
- * the Modrinth / CurseForge browser clients. The GUI layer is deliberately thin
- * and isolated behind interfaces so the core logic stays headless-testable.
+ * Provides both a Swing GUI (the default entry point, FlatLaf-themed) and a
+ * headless diagnostic CLI. Core logic — accounts, version + Java resolution,
+ * process control, the Modrinth / CurseForge clients — stays UI-free and
+ * headless-testable; the GUI is a thin layer over the same LauncherContext.
  */
 plugins {
     id 'application'
@@ -13,14 +14,52 @@ dependencies {
     implementation project(':common')
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'org.slf4j:slf4j-api:2.0.13'
+
+    // Modern flat look-and-feel for the Swing GUI (no native libraries needed).
+    implementation 'com.formdev:flatlaf:3.5.4'
+    implementation 'com.formdev:flatlaf-extras:3.5.4'
 }
 
 application {
-    mainClass = 'com.spaceline.launcher.SpaceLineLauncher'
+    // The GUI window is the default; passing CLI args (e.g. "status") runs the
+    // diagnostic CLI instead. See SpaceLineLauncherApp#main.
+    mainClass = 'com.spaceline.launcher.gui.SpaceLineLauncherApp'
 }
 
 tasks.named('run') {
-    // The launcher reads/writes the per-user data directory; allow it to find a
-    // headless flag for CI smoke runs.
     systemProperty 'spaceline.headless', findProperty('headless') ?: 'false'
+}
+
+/*
+ * Produces a native Windows installer + Space~line.exe with a bundled Java
+ * runtime, so end users don't need a JDK installed. Run on Windows:
+ *
+ *   gradlew.bat :launcher:packageExe
+ *
+ * Output: launcher/build/jpackage/. Requires the JDK's jpackage (bundled with
+ * JDK 21) and, for the .msi/.exe installer, WiX Toolset on PATH.
+ */
+tasks.register('packageExe', Exec) {
+    dependsOn 'installDist'
+    group = 'distribution'
+    description = 'Builds a native Windows .exe/.msi via jpackage (run on Windows).'
+
+    def installDir = layout.buildDirectory.dir('install/launcher')
+    def outputDir = layout.buildDirectory.dir('jpackage')
+
+    doFirst {
+        delete outputDir
+        outputDir.get().asFile.mkdirs()
+    }
+
+    commandLine 'jpackage',
+            '--type', 'app-image',
+            '--name', 'Space~line',
+            '--app-version', project.version.toString().replaceAll('[^0-9.].*', '') ?: '1.0',
+            '--input', installDir.get().dir('lib').asFile.absolutePath,
+            '--main-jar', "launcher-${project.version}.jar",
+            '--main-class', 'com.spaceline.launcher.gui.SpaceLineLauncherApp',
+            '--dest', outputDir.get().asFile.absolutePath,
+            '--vendor', 'Space~line',
+            '--java-options', '-Xmx2g'
 }
