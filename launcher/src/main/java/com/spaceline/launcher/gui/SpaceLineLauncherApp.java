@@ -41,10 +41,24 @@ public final class SpaceLineLauncherApp {
         LauncherContext context = new LauncherContext();
         context.initialize();
 
+        java.awt.image.BufferedImage logo = loadLogo();
         EventQueue.invokeLater(() -> {
-            LauncherFrame frame = new LauncherFrame(context);
-            frame.setVisible(true);
+            Runnable openMain = () -> new LauncherFrame(context).setVisible(true);
+            if (logo != null) {
+                new SplashScreen(logo, openMain).showSplash();
+            } else {
+                openMain.run();
+            }
         });
+    }
+
+    private static java.awt.image.BufferedImage loadLogo() {
+        try (var in = SpaceLineLauncherApp.class.getResourceAsStream("/branding/spaceline.png")) {
+            return in != null ? javax.imageio.ImageIO.read(in) : null;
+        } catch (Exception e) {
+            LOG.debug("Could not load splash logo", e);
+            return null;
+        }
     }
 
     private SpaceLineLauncherApp() {

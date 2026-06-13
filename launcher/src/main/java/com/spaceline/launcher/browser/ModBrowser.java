@@ -60,21 +60,31 @@ public final class ModBrowser {
      */
     public List<Path> install(SearchResult result, String minecraftVersion, String loaderId,
                               Path targetDir) throws IOException {
-        ContentProvider provider = providerFor(result.provider());
+        return installById(result.provider(), result.projectId(), minecraftVersion, loaderId, targetDir);
+    }
+
+    /**
+     * One-click install by provider + project id/slug (e.g. {@code "modrinth"},
+     * {@code "sodium"}), resolving dependencies and verifying hashes. Used by the
+     * bundled-essentials installer and pre-built profiles.
+     */
+    public List<Path> installById(String providerId, String projectId, String minecraftVersion,
+                                  String loaderId, Path targetDir) throws IOException {
+        ContentProvider provider = providerFor(providerId);
         List<Path> installed = new ArrayList<>();
         Set<String> visited = new HashSet<>();
         Deque<String> queue = new ArrayDeque<>();
-        queue.add(result.projectId());
+        queue.add(projectId);
 
         while (!queue.isEmpty()) {
-            String projectId = queue.poll();
-            if (!visited.add(projectId)) {
+            String current = queue.poll();
+            if (!visited.add(current)) {
                 continue;
             }
-            Optional<ProjectVersion> best = provider.bestVersion(projectId, minecraftVersion, loaderId);
+            Optional<ProjectVersion> best = provider.bestVersion(current, minecraftVersion, loaderId);
             if (best.isEmpty()) {
                 LOG.warn("No compatible version of {} for {} {}; skipping",
-                        projectId, minecraftVersion, loaderId);
+                        current, minecraftVersion, loaderId);
                 continue;
             }
             ProjectVersion version = best.get();

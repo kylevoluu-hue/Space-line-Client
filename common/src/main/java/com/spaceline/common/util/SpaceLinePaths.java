@@ -72,6 +72,20 @@ public final class SpaceLinePaths {
         return ensure(root.resolve("themes"));
     }
 
+    /** Saved mod/resource-pack/shader profiles. */
+    public Path profiles() {
+        return ensure(root.resolve("profiles"));
+    }
+
+    /** User-imported fonts and backgrounds for UI customization. */
+    public Path fonts() {
+        return ensure(root.resolve("fonts"));
+    }
+
+    public Path backgrounds() {
+        return ensure(root.resolve("backgrounds"));
+    }
+
     /** Crash reports and exported error bundles. */
     public Path crashReports() {
         return ensure(root.resolve("crash-reports"));

@@ -6,12 +6,14 @@ import com.spaceline.launcher.account.AccountManager;
 import com.spaceline.launcher.account.AccountStore;
 import com.spaceline.launcher.account.MicrosoftAuthenticator;
 import com.spaceline.launcher.browser.ModBrowser;
+import com.spaceline.launcher.bundled.BundledMods;
 import com.spaceline.launcher.instance.InstanceManager;
 import com.spaceline.launcher.java.JavaManager;
 import com.spaceline.launcher.launch.FabricMetaService;
 import com.spaceline.launcher.launch.GameLauncher;
 import com.spaceline.launcher.launch.VersionInstaller;
 import com.spaceline.launcher.process.ProcessController;
+import com.spaceline.launcher.profile.ProfileManager;
 import com.spaceline.launcher.skin.SkinManager;
 import com.spaceline.launcher.version.VersionRepository;
 import com.spaceline.launcher.version.adapter.VersionAdapterRegistry;
@@ -39,6 +41,8 @@ public final class LauncherContext {
     private final ModBrowser modBrowser;
     private final SkinManager skinManager;
     private final ThemeManager themeManager;
+    private final ProfileManager profileManager;
+    private final BundledMods bundledMods;
 
     public LauncherContext() {
         this(new SpaceLinePaths());
@@ -59,6 +63,8 @@ public final class LauncherContext {
         this.modBrowser = ModBrowser.withDefaults();
         this.skinManager = new SkinManager(paths.skins(), paths.capes());
         this.themeManager = new ThemeManager(paths.themes());
+        this.profileManager = new ProfileManager(paths.profiles());
+        this.bundledMods = new BundledMods(modBrowser);
     }
 
     /** Loads persisted state. Call once at startup. */
@@ -113,6 +119,14 @@ public final class LauncherContext {
 
     public ThemeManager themes() {
         return themeManager;
+    }
+
+    public ProfileManager profiles() {
+        return profileManager;
+    }
+
+    public BundledMods bundledMods() {
+        return bundledMods;
     }
 
     /**

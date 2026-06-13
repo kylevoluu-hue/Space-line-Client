@@ -119,6 +119,14 @@ public final class LauncherFrame extends JFrame {
         addAccount.addActionListener(e -> showAddAccountMenu(addAccount));
         right.add(addAccount);
 
+        JButton profiles = new JButton("Profiles");
+        profiles.addActionListener(e -> new ProfilesDialog(this, context).setVisible(true));
+        right.add(profiles);
+
+        JButton credits = new JButton("Credits");
+        credits.addActionListener(e -> new CreditsDialog(this).setVisible(true));
+        right.add(credits);
+
         JToggleButton themeToggle = new JToggleButton("Light");
         themeToggle.addActionListener(e -> toggleTheme(themeToggle));
         right.add(themeToggle);
@@ -230,6 +238,16 @@ public final class LauncherFrame extends JFrame {
             selected.setMaxMemoryMb(ramSlider.getValue());
             context.instances().save(selected);
         }
+    }
+
+    /** The instance currently selected in the sidebar, or null. */
+    public Instance selectedInstance() {
+        return instanceList.getSelectedValue();
+    }
+
+    /** Re-reads instances from disk (e.g. after a profile import). */
+    public void reloadInstances() {
+        refreshInstances();
     }
 
     private void updateInstanceDetail() {
@@ -381,6 +399,9 @@ public final class LauncherFrame extends JFrame {
                 if (loader == ModLoader.FABRIC) {
                     instance.setFabricLoaderVersion(context.fabric().latestStableLoader());
                     context.instances().save(instance);
+                    // Always-updating essentials: Fabric API, Sodium, FerriteCore.
+                    context.bundledMods().installEssentials(loader, version,
+                            context.instances().modsDir(instance.id()));
                 }
                 return instance;
             }
